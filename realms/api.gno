@@ -9,6 +9,7 @@ func NewRepository(name string) *Repository {
 		identity: Identity{
 			Name: name,
 		},
+		head: "main",
 	}
 }
 
@@ -18,6 +19,9 @@ func (r *Repository) Commit(message string, files map[string][]byte) string {
 	}
 	if r.objects == nil {
 		r.objects = avl.NewTree()
+	}
+	if r.refs == nil {
+		r.refs = avl.NewTree()
 	}
 
 	treeHash := createTreeHash(files)
@@ -46,6 +50,7 @@ func (r *Repository) Commit(message string, files map[string][]byte) string {
 	commit.Hash = commitHash
 
 	r.commits.Set(commitHash, commit)
+	r.refs.Set(r.head, commitHash)
 
 	return commitHash
 }
@@ -85,4 +90,21 @@ func (r *Repository) GetFile(commitHash, path string) []byte {
 	}
 
 	return fileValue.([]byte)
+}
+
+func (r *Repository) GetHeadCommit() *Commit {
+	if r.refs == nil {
+		return nil
+	}
+
+	commitHash, exists := r.refs.Get(r.head)
+	if !exists {
+		return nil
+	}
+
+	return r.GetCommit(commitHash.(string))
+}
+
+func (r *Repository) GetCurrentBranch() string {
+	return r.head
 }

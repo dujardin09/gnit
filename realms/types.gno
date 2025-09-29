@@ -9,6 +9,7 @@ import (
 type Repository struct {
 	identity Identity
 
+	head    string    // current branch name
 	refs    *avl.Tree // branch (string) -> hash
 	commits *avl.Tree // hash -> []byte
 	objects *avl.Tree // hash -> Object
