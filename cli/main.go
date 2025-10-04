@@ -21,12 +21,12 @@ func main() {
 	switch command {
 	case "pull":
 		handlePull()
-	case "push":
-		handlePush()
+	case "commit":
+		handleCommit()
 	case "help", "--help", "-h":
 		printUsage()
 	default:
-		fmt.Printf("Erreur: commande inconnue '%s'\n", command)
+		fmt.Printf("Error: unknown command '%s'\n", command)
 		printUsage()
 		os.Exit(1)
 	}
@@ -35,19 +35,19 @@ func main() {
 func printUsage() {
 	fmt.Println("Usage: gnit <command> [options]")
 	fmt.Println()
-	fmt.Println("Commandes disponibles:")
-	fmt.Println("  pull <file>     Récupère un fichier depuis le repository")
-	fmt.Println("  push <message>  Pousse les changements avec un message de commit")
-	fmt.Println("  help            Affiche cette aide")
+	fmt.Println("Available commands:")
+	fmt.Println("  pull <file>     Fetch a file from the repository")
+	fmt.Println("  commit <message>  Commit changes with a message")
+	fmt.Println("  help            Display this help")
 	fmt.Println()
-	fmt.Println("Exemples:")
+	fmt.Println("Examples:")
 	fmt.Println("  gnit pull example.gno")
-	fmt.Println("  gnit push \"Mon message de commit\"")
+	fmt.Println("  gnit commit \"My commit message\"")
 }
 
 func handlePull() {
 	if len(os.Args) < 3 {
-		fmt.Println("Erreur: nom de fichier requis pour pull")
+		fmt.Println("Error: filename required for pull")
 		fmt.Println("Usage: gnit pull <file>")
 		os.Exit(1)
 	}
@@ -62,41 +62,41 @@ func handlePull() {
 
 	output, err := cmd.Output()
 	if err != nil {
-		fmt.Printf("Erreur lors de l'exécution de la commande: %v\n", err)
+		fmt.Printf("Error executing command: %v\n", err)
 		os.Exit(1)
 	}
 
 	content, err := parseHexOutput(string(output))
 	if err != nil {
-		fmt.Printf("Erreur lors du parsing de la réponse: %v\n", err)
+		fmt.Printf("Error parsing response: %v\n", err)
 		os.Exit(1)
 	}
 
 	if len(content) == 0 {
-		fmt.Printf("Fichier '%s' non trouvé ou vide\n", filename)
+		fmt.Printf("File '%s' not found or empty\n", filename)
 		os.Exit(1)
 	}
 
 	err = os.WriteFile(filename, content, 0644)
 	if err != nil {
-		fmt.Printf("Erreur lors de l'écriture du fichier: %v\n", err)
+		fmt.Printf("Error writing file: %v\n", err)
 		os.Exit(1)
 	}
 
-	fmt.Printf("Fichier '%s' récupéré avec succès (%d bytes)\n", filename, len(content))
+	fmt.Printf("File '%s' fetched successfully (%d bytes)\n", filename, len(content))
 }
 
-func handlePush() {
+func handleCommit() {
 	if len(os.Args) < 3 {
-		fmt.Println("Erreur: message de commit requis pour push")
-		fmt.Println("Usage: gnit push \"<message>\"")
+		fmt.Println("Error: message required for commit")
+		fmt.Println("Usage: gnit commit \"<message>\"")
 		os.Exit(1)
 	}
 
 	message := strings.Join(os.Args[2:], " ")
 	message = strings.Trim(message, "\"")
 
-	fmt.Printf("Pushing avec le message: '%s'...\n", message)
+	fmt.Printf("Committing with message: '%s'...\n", message)
 
 	files := make(map[string][]byte)
 
@@ -108,7 +108,7 @@ func handlePush() {
 		if !info.IsDir() && strings.HasSuffix(path, ".md") {
 			content, readErr := os.ReadFile(path)
 			if readErr != nil {
-				fmt.Printf("Avertissement: impossible de lire %s: %v\n", path, readErr)
+				fmt.Printf("Warning: unable to read %s: %v\n", path, readErr)
 				return nil
 			}
 			files[path] = content
@@ -118,16 +118,16 @@ func handlePush() {
 	})
 
 	if err != nil {
-		fmt.Printf("Erreur lors de la lecture des fichiers: %v\n", err)
+		fmt.Printf("Error reading files: %v\n", err)
 		os.Exit(1)
 	}
 
 	if len(files) == 0 {
-		fmt.Println("Aucun fichier .gno trouvé à pousser")
+		fmt.Println("No .md files found to commit")
 		os.Exit(1)
 	}
 
-	fmt.Printf("Fichiers à pousser: %d\n", len(files))
+	fmt.Printf("Files to commit: %d\n", len(files))
 	for filename := range files {
 		fmt.Printf("  - %s\n", filename)
 	}
@@ -159,11 +159,11 @@ func handlePush() {
 
 	err = cmd.Run()
 	if err != nil {
-		fmt.Printf("Erreur lors de l'exécution de la commande: %v\n", err)
+		fmt.Printf("Error executing command: %v\n", err)
 		os.Exit(1)
 	}
 
-	fmt.Printf("Push réussi!\n")
+	fmt.Printf("Commit successful!\n")
 }
 
 func parseHexOutput(output string) ([]byte, error) {
@@ -177,7 +177,7 @@ func parseHexOutput(output string) ([]byte, error) {
 	}
 
 	if dataLine == "" {
-		return nil, fmt.Errorf("ligne data: non trouvée")
+		return nil, fmt.Errorf("data: line not found")
 	}
 
 	if strings.Contains(dataLine, "(nil []uint8)") {
@@ -188,12 +188,12 @@ func parseHexOutput(output string) ([]byte, error) {
 	matches := re.FindStringSubmatch(dataLine)
 
 	if len(matches) < 2 {
-		return nil, fmt.Errorf("format de sortie non reconnu: %s", dataLine)
+		return nil, fmt.Errorf("unrecognized output format: %s", dataLine)
 	}
 
 	data, err := hex.DecodeString(matches[1])
 	if err != nil {
-		return nil, fmt.Errorf("erreur de décodage hex: %v", err)
+		return nil, fmt.Errorf("hex decoding error: %v", err)
 	}
 
 	return data, nil
