@@ -1,13 +1,13 @@
 package main
 
 import (
-	"encoding/hex"
 	"fmt"
 	"os"
-	"os/exec"
-	"path/filepath"
-	"regexp"
 	"strings"
+
+	"gnit/cli/internal/commands"
+	"gnit/cli/internal/config"
+	"gnit/cli/internal/gnokey"
 )
 
 func main() {
@@ -16,13 +16,17 @@ func main() {
 		os.Exit(1)
 	}
 
+	cfg := config.DefaultConfig()
+
+	client := gnokey.NewClient(cfg)
+
 	command := os.Args[1]
 
 	switch command {
 	case "pull":
-		handlePull()
+		handlePull(client, cfg)
 	case "commit":
-		handleCommit()
+		handleCommit(client, cfg)
 	case "help", "--help", "-h":
 		printUsage()
 	default:
@@ -32,20 +36,7 @@ func main() {
 	}
 }
 
-func printUsage() {
-	fmt.Println("Usage: gnit <command> [options]")
-	fmt.Println()
-	fmt.Println("Available commands:")
-	fmt.Println("  pull <file>     Fetch a file from the repository")
-	fmt.Println("  commit <message>  Commit changes with a message")
-	fmt.Println("  help            Display this help")
-	fmt.Println()
-	fmt.Println("Examples:")
-	fmt.Println("  gnit pull example.gno")
-	fmt.Println("  gnit commit \"My commit message\"")
-}
-
-func handlePull() {
+func handlePull(client *gnokey.Client, cfg *config.Config) {
 	if len(os.Args) < 3 {
 		fmt.Println("Error: filename required for pull")
 		fmt.Println("Usage: gnit pull <file>")
@@ -53,40 +44,15 @@ func handlePull() {
 	}
 
 	filename := os.Args[2]
+	cmd := commands.NewPull(client, cfg)
 
-	fmt.Printf("Pulling '%s'...\n", filename)
-
-	cmd := exec.Command("gnokey", "query", "vm/qeval",
-		"-data", fmt.Sprintf("gno.land/r/example.Repo.Pull(\"%s\")", filename),
-		"-remote", "tcp://127.0.0.1:26657")
-
-	output, err := cmd.Output()
-	if err != nil {
-		fmt.Printf("Error executing command: %v\n", err)
+	if err := cmd.Execute(filename); err != nil {
+		fmt.Printf("Error: %v\n", err)
 		os.Exit(1)
 	}
-
-	content, err := parseHexOutput(string(output))
-	if err != nil {
-		fmt.Printf("Error parsing response: %v\n", err)
-		os.Exit(1)
-	}
-
-	if len(content) == 0 {
-		fmt.Printf("File '%s' not found or empty\n", filename)
-		os.Exit(1)
-	}
-
-	err = os.WriteFile(filename, content, 0644)
-	if err != nil {
-		fmt.Printf("Error writing file: %v\n", err)
-		os.Exit(1)
-	}
-
-	fmt.Printf("File '%s' fetched successfully (%d bytes)\n", filename, len(content))
 }
 
-func handleCommit() {
+func handleCommit(client *gnokey.Client, cfg *config.Config) {
 	if len(os.Args) < 3 {
 		fmt.Println("Error: message required for commit")
 		fmt.Println("Usage: gnit commit \"<message>\"")
@@ -96,137 +62,23 @@ func handleCommit() {
 	message := strings.Join(os.Args[2:], " ")
 	message = strings.Trim(message, "\"")
 
-	fmt.Printf("Committing with message: '%s'...\n", message)
+	cmd := commands.NewCommit(client, cfg)
 
-	files := make(map[string][]byte)
-
-	err := filepath.Walk(".", func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-
-		if !info.IsDir() && strings.HasSuffix(path, ".md") {
-			content, readErr := os.ReadFile(path)
-			if readErr != nil {
-				fmt.Printf("Warning: unable to read %s: %v\n", path, readErr)
-				return nil
-			}
-			files[path] = content
-		}
-
-		return nil
-	})
-
-	if err != nil {
-		fmt.Printf("Error reading files: %v\n", err)
+	if err := cmd.Execute(message); err != nil {
+		fmt.Printf("Error: %v\n", err)
 		os.Exit(1)
 	}
-
-	if len(files) == 0 {
-		fmt.Println("No .md files found to commit")
-		os.Exit(1)
-	}
-
-	fmt.Printf("Files to commit: %d\n", len(files))
-	for filename := range files {
-		fmt.Printf("  - %s\n", filename)
-	}
-
-	var filesData strings.Builder
-	for filename, content := range files {
-		filesData.WriteString(filename)
-		filesData.WriteString("|")
-		filesData.WriteString(string(content))
-		filesData.WriteString("\n")
-	}
-
-	// Create temporary Gno file to call Repo.Commit()
-	tmpGno := fmt.Sprintf(`package main
-
-import (
-	"strings"
-	"gno.land/r/example"
-)
-
-func main() {
-	// Parse files data
-	filesData := %q
-	lines := strings.Split(filesData, "\n")
-	files := make(map[string][]byte)
-
-	for _, line := range lines {
-		if line == "" {
-			continue
-		}
-		parts := strings.SplitN(line, "|", 2)
-		if len(parts) == 2 {
-			files[parts[0]] = []byte(parts[1])
-		}
-	}
-
-	hash := example.Repo.Commit(%q, files)
-	println("Commit hash:", hash)
-}
-`, filesData.String(), message)
-	tmpFile := "/tmp/gnit_call.gno"
-	err = os.WriteFile(tmpFile, []byte(tmpGno), 0644)
-	if err != nil {
-		fmt.Printf("Error creating temp file: %v\n", err)
-		os.Exit(1)
-	}
-	defer os.Remove(tmpFile)
-
-	cmd := exec.Command("gnokey", "maketx", "run",
-		"-gas-fee", "1000000ugnot",
-		"-gas-wanted", "50000000",
-		"-broadcast",
-		"-chainid", "dev",
-		"-remote", "tcp://127.0.0.1:26657",
-		"test",
-		tmpFile)
-
-	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-
-	err = cmd.Run()
-	if err != nil {
-		fmt.Printf("Error executing command: %v\n", err)
-		os.Exit(1)
-	}
-
-	fmt.Printf("Commit successful!\n")
 }
 
-func parseHexOutput(output string) ([]byte, error) {
-	lines := strings.Split(output, "\n")
-	var dataLine string
-	for _, line := range lines {
-		if strings.HasPrefix(line, "data: ") {
-			dataLine = line
-			break
-		}
-	}
-
-	if dataLine == "" {
-		return nil, fmt.Errorf("data: line not found")
-	}
-
-	if strings.Contains(dataLine, "(nil []uint8)") {
-		return []byte{}, nil
-	}
-
-	re := regexp.MustCompile(`slice\[0x([0-9a-fA-F]+)\]`)
-	matches := re.FindStringSubmatch(dataLine)
-
-	if len(matches) < 2 {
-		return nil, fmt.Errorf("unrecognized output format: %s", dataLine)
-	}
-
-	data, err := hex.DecodeString(matches[1])
-	if err != nil {
-		return nil, fmt.Errorf("hex decoding error: %v", err)
-	}
-
-	return data, nil
+func printUsage() {
+	fmt.Println("Usage: gnit <command> [options]")
+	fmt.Println()
+	fmt.Println("Available commands:")
+	fmt.Println("  pull <file>       Fetch a file from the repository")
+	fmt.Println("  commit <message>  Commit changes with a message")
+	fmt.Println("  help              Display this help")
+	fmt.Println()
+	fmt.Println("Examples:")
+	fmt.Println("  gnit pull example.gno")
+	fmt.Println("  gnit commit \"My commit message\"")
 }
