@@ -57,7 +57,7 @@ func handlePull() {
 	fmt.Printf("Pulling '%s'...\n", filename)
 
 	cmd := exec.Command("gnokey", "query", "vm/qeval",
-		"-data", fmt.Sprintf("gno.land/r/example.Pull(\"%s\")", filename),
+		"-data", fmt.Sprintf("gno.land/r/example.Repo.Pull(\"%s\")", filename),
 		"-remote", "tcp://127.0.0.1:26657")
 
 	output, err := cmd.Output()
@@ -140,18 +140,50 @@ func handleCommit() {
 		filesData.WriteString("\n")
 	}
 
-	cmd := exec.Command("gnokey", "maketx", "call",
-		"-pkgpath", "gno.land/r/example",
-		"-func", "Push",
-		"-args", message,
-		"-args", filesData.String(),
+	// Create temporary Gno file to call Repo.Commit()
+	tmpGno := fmt.Sprintf(`package main
+
+import (
+	"strings"
+	"gno.land/r/example"
+)
+
+func main() {
+	// Parse files data
+	filesData := %q
+	lines := strings.Split(filesData, "\n")
+	files := make(map[string][]byte)
+
+	for _, line := range lines {
+		if line == "" {
+			continue
+		}
+		parts := strings.SplitN(line, "|", 2)
+		if len(parts) == 2 {
+			files[parts[0]] = []byte(parts[1])
+		}
+	}
+
+	hash := example.Repo.Commit(%q, files)
+	println("Commit hash:", hash)
+}
+`, filesData.String(), message)
+	tmpFile := "/tmp/gnit_call.gno"
+	err = os.WriteFile(tmpFile, []byte(tmpGno), 0644)
+	if err != nil {
+		fmt.Printf("Error creating temp file: %v\n", err)
+		os.Exit(1)
+	}
+	defer os.Remove(tmpFile)
+
+	cmd := exec.Command("gnokey", "maketx", "run",
 		"-gas-fee", "1000000ugnot",
 		"-gas-wanted", "50000000",
-		"-send", "",
 		"-broadcast",
 		"-chainid", "dev",
 		"-remote", "tcp://127.0.0.1:26657",
-		"test")
+		"test",
+		tmpFile)
 
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout

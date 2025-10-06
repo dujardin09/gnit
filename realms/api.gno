@@ -13,6 +13,15 @@ func NewRepository(name string) *Repository {
 	}
 }
 
+func (r *Repository) Pull(file string) []byte {
+	headCommit := r.GetHeadCommit()
+	if headCommit == nil {
+		return nil
+	}
+
+	return r.GetFile(headCommit.Hash, file)
+}
+
 func (r *Repository) Commit(message string, files map[string][]byte) string {
 	if r.commits == nil {
 		r.commits = avl.NewTree()
