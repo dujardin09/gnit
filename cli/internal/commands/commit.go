@@ -57,6 +57,13 @@ import (
 	"gno.land/r/example"
 )
 
+func unescape(s string) string {
+	s = strings.ReplaceAll(s, "\\n", "\n")
+	s = strings.ReplaceAll(s, "\\|", "|")
+	s = strings.ReplaceAll(s, "\\\\", "\\")
+	return s
+}
+
 func main() {
 	filesData := %q
 	lines := strings.Split(filesData, "\n")
@@ -68,7 +75,7 @@ func main() {
 		}
 		parts := strings.SplitN(line, "|", 2)
 		if len(parts) == 2 {
-			files[parts[0]] = []byte(parts[1])
+			files[parts[0]] = []byte(unescape(parts[1]))
 		}
 	}
 

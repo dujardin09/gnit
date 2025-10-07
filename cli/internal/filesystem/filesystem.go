@@ -44,9 +44,13 @@ func WriteFile(path string, content []byte) error {
 func SerializeFiles(files map[string][]byte) string {
 	var builder strings.Builder
 	for filename, content := range files {
+		escaped := strings.ReplaceAll(string(content), "\\", "\\\\")
+		escaped = strings.ReplaceAll(escaped, "\n", "\\n")
+		escaped = strings.ReplaceAll(escaped, "|", "\\|")
+
 		builder.WriteString(filename)
 		builder.WriteString("|")
-		builder.WriteString(string(content))
+		builder.WriteString(escaped)
 		builder.WriteString("\n")
 	}
 	return builder.String()
