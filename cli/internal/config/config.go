@@ -15,7 +15,7 @@ func DefaultConfig() *Config {
 		Remote:    "tcp://127.0.0.1:26657",
 		ChainID:   "dev",
 		GasFee:    "1000000ugnot",
-		GasWanted: "50000000",
+		GasWanted: "500000000",
 		Account:   "test",
 	}
 }

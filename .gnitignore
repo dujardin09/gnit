@@ -1,0 +1,35 @@
+# Gnit ignore file
+# Similar to .gitignore, patterns to exclude from commits
+
+# Build artifacts
+*.o
+*.so
+*.dylib
+*.exe
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Dependencies
+.gitignore
+node_modules/
+vendor/
+
+# Binaries
+cli/gnit
+gnit
+**/gnit
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.temp

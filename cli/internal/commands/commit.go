@@ -23,13 +23,13 @@ func NewCommit(client *gnokey.Client, cfg *config.Config) *Commit {
 func (c *Commit) Execute(message string) error {
 	fmt.Printf("Committing with message: '%s'...\n", message)
 
-	files, err := filesystem.CollectFiles(".md")
+	files, err := filesystem.CollectFiles()
 	if err != nil {
 		return fmt.Errorf("failed to collect files: %w", err)
 	}
 
 	if len(files) == 0 {
-		return fmt.Errorf("no .md files found to commit")
+		return fmt.Errorf("no files found to commit")
 	}
 
 	fmt.Printf("Files to commit: %d\n", len(files))
